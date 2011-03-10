@@ -5,6 +5,7 @@ rescue LoadError
   # SSL features cannot be tested
 end
 require 'webrick/httpservlet/abstract'
+require 'zlib'
 
 class String
   def encoding_aware?
@@ -69,7 +70,7 @@ module TestNetHTTPUtils
       })
     end
     @server = WEBrick::HTTPServer.new(server_config)
-    @server.mount('/', Servlet, config('chunked'))
+    @server.mount('/', Servlet, config('chunked'), config("gzip"))
     @server.start
     n_try_max = 5
     begin
@@ -88,14 +89,28 @@ module TestNetHTTPUtils
   $test_net_http_data_type = 'application/octet-stream'
 
   class Servlet < WEBrick::HTTPServlet::AbstractServlet
-    def initialize(this, chunked = false)
+    def initialize(this, chunked = false, gzip = false)
       @chunked = chunked
+      @gzip = gzip
     end
 
     def do_GET(req, res)
       res['Content-Type'] = $test_net_http_data_type
-      res.body = $test_net_http_data
       res.chunked = @chunked
+
+      raw_body = $test_net_http_data
+
+      if @gzip
+        res['Content-Encoding'] = 'gzip'
+        io = StringIO.new
+        gz = Zlib::GzipWriter.new(io)
+        gz.write raw_body
+        gz.close
+
+        body = io.string
+      end
+
+      res.body = body || raw_body
     end
 
     # echo server
