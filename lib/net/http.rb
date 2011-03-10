@@ -755,6 +755,8 @@ module Net   #:nodoc:
       if use_ssl?
         ssl_parameters = Hash.new
         iv_list = instance_variables
+        iv_list = iv_list.map { |name| name.to_sym } unless iv_list.first.is_a?(Symbol)
+
         SSL_ATTRIBUTES.each do |name|
           ivname = "@#{name}".intern
           if iv_list.include?(ivname) and

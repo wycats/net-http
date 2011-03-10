@@ -1,3 +1,5 @@
+require "stringio"
+
 class StringIO
   def read_nonblock(*args)
     val = read(*args)

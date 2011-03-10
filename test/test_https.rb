@@ -3,8 +3,8 @@ begin
   require 'net/https'
   require 'stringio'
   require 'timeout'
-  require File.expand_path("../../openssl/utils", File.dirname(__FILE__))
-  require File.expand_path("utils", File.dirname(__FILE__))
+  require 'openssl/utils'
+  require 'utils'
 rescue LoadError
   # should skip this test
 end
