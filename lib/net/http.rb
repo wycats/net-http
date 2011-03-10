@@ -1014,7 +1014,7 @@ module Net   #:nodoc:
           the_body = r.read_body dest, &block
           case r["content-encoding"]
           when "gzip"
-            r.body= Zlib::GzipReader.new(StringIO.new(the_body), :encoding => "ASCII-8BIT").read
+            r.body= gzip_reader_for(the_body, "ASCII-8BIT").read
             r.delete("content-encoding")
           when "deflate"
             r.body= Zlib::Inflate.inflate(the_body);
@@ -1030,6 +1030,14 @@ module Net   #:nodoc:
         res = r
       }
       res
+    end
+
+    def gzip_reader_for(io, encoding)
+      if "".respond_to?(:encode)
+        Zlib::GzipReader.new(StringIO.new(io), :encoding => encoding)
+      else
+        Zlib::GzipReader.new(StringIO.new(io))
+      end
     end
 
     # Gets only the header from +path+ on the connected-to host.
