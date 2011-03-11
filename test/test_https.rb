@@ -1,6 +1,6 @@
 require "test/unit"
 begin
-  require 'net/https'
+  require 'net2/https'
   require 'stringio'
   require 'timeout'
   require 'openssl/utils'

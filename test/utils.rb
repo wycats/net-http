@@ -7,6 +7,9 @@ end
 require 'webrick/httpservlet/abstract'
 require 'zlib'
 
+require 'net2/http'
+Net = Net2
+
 class String
   def encoding_aware?
     respond_to? :force_encoding
@@ -25,7 +28,7 @@ module TestNetHTTPUtils
   end
 
   def new
-    klass = Net::HTTP::Proxy(config('proxy_host'), config('proxy_port'))
+    klass = Net2::HTTP::Proxy(config('proxy_host'), config('proxy_port'))
     http = klass.new(config('host'), config('port'))
     http.set_debug_output logfile()
     http

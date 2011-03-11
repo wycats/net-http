@@ -1,4 +1,4 @@
-require 'net/http'
+require 'utils'
 require 'test/unit'
 
 class HTTPHeaderTest < Test::Unit::TestCase

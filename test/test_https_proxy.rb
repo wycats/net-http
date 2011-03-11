@@ -1,5 +1,5 @@
 begin
-  require 'net/https'
+  require 'net2/https'
 rescue LoadError
 end
 require 'test/unit'

@@ -19,16 +19,16 @@
 # See Net::HTTP for an overview and examples.
 #
 
-require 'net/protocol'
+require 'net2/protocol'
 autoload :OpenSSL, 'openssl'
 require 'uri'
 autoload :SecureRandom, 'securerandom'
 
 if RUBY_VERSION < "1.9"
-  require "net/backports"
+  require "net2/backports"
 end
 
-module Net   #:nodoc:
+module Net2   #:nodoc:
 
   # :stopdoc:
   class HTTPBadResponse < StandardError; end
@@ -2781,7 +2781,7 @@ module Net   #:nodoc:
     ProxyMod = ProxyDelta
   end
   module NetPrivate
-    HTTPRequest = ::Net::HTTPRequest
+    HTTPRequest = ::Net2::HTTPRequest
   end
 
   HTTPInformationCode = HTTPInformation

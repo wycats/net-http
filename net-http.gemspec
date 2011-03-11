@@ -1,10 +1,10 @@
 # -*- encoding: utf-8 -*-
 $:.push File.expand_path("../lib", __FILE__)
-require "net/http/version"
+require "net2/http/version"
 
 Gem::Specification.new do |s|
   s.name        = "net-http"
-  s.version     = Net::VERSION
+  s.version     = Net2::VERSION
   s.platform    = Gem::Platform::RUBY
   s.authors     = ["TODO: Write your name"]
   s.email       = ["TODO: Write your email address"]

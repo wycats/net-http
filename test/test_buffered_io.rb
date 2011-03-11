@@ -1,5 +1,4 @@
 require 'test/unit'
-require 'net/http'
 require 'stringio'
 
 require 'utils'

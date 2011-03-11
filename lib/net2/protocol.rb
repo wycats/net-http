@@ -20,8 +20,9 @@
 
 require 'socket'
 require 'timeout'
+require 'net2/protocol'
 
-module Net # :nodoc:
+module Net2 # :nodoc:
 
   class Protocol   #:nodoc: internal use only
     private
@@ -396,7 +397,7 @@ module Net # :nodoc:
 
 
   module NetPrivate   #:nodoc: obsolete
-    Socket = ::Net::InternetMessageIO
+    Socket = ::Net2::InternetMessageIO
   end
 
 end   # module Net
