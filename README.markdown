@@ -1,6 +1,7 @@
-This repo is an attempt to update the Net::HTTP code from Ruby 1.9 to
-work in both Ruby 1.8 and 1.9.
+This repo contains a number of experimental modifications to the version of Net::HTTP that ships with Ruby 1.9. TODOs:
 
-It will also fix several issues with Net::HTTP and add tests for things
-like gzip, where features exist but are not tested. In some cases,
-adding testing exposes bugs that can be fixed.
+* <s>Porting the code to work on Ruby 1.8</s>
+* Add missing tests for features, including gzip
+* Fixing gzip when using requests that a block as an iterator
+* Adding support for getting the response as a stream, rather than having to read the entire body at once.
+* Other features as I think of them
