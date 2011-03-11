@@ -3,14 +3,14 @@ $:.push File.expand_path("../lib", __FILE__)
 require "net2/http/version"
 
 Gem::Specification.new do |s|
-  s.name        = "net-http"
+  s.name        = "net2-http"
   s.version     = Net2::VERSION
   s.platform    = Gem::Platform::RUBY
-  s.authors     = ["TODO: Write your name"]
-  s.email       = ["TODO: Write your email address"]
-  s.homepage    = ""
-  s.summary     = %q{TODO: Write a gem summary}
-  s.description = %q{TODO: Write a gem description}
+  s.authors     = ["Yehuda Katz"]
+  s.email       = ["wycats@gmail.com"]
+  s.homepage    = "http://www.yehudakatz.com"
+  s.summary     = %q{A number of improvements to Net::HTTP}
+  s.description = File.read(File.expand_path("../README", __FILE__))
 
   s.rubyforge_project = "net-http"
 
