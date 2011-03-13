@@ -1483,6 +1483,9 @@ module Net2   #:nodoc:
   #
   class HTTP
     class Response
+      CODE_CLASS_TO_OBJ = {}
+      CODE_TO_OBJ = {}
+
       # true if the response has a body.
       def self.body_permitted?
         self::HAS_BODY
@@ -1499,60 +1502,6 @@ module Net2   #:nodoc:
   require "net2/http/statuses"
 
   class HTTPResponse   # reopen
-
-    CODE_CLASS_TO_OBJ = {
-      '1' => HTTPInformation,
-      '2' => HTTPSuccess,
-      '3' => HTTPRedirection,
-      '4' => HTTPClientError,
-      '5' => HTTPServerError
-    }
-    CODE_TO_OBJ = {
-      '100' => HTTPContinue,
-      '101' => HTTPSwitchProtocol,
-
-      '200' => HTTPOK,
-      '201' => HTTPCreated,
-      '202' => HTTPAccepted,
-      '203' => HTTPNonAuthoritativeInformation,
-      '204' => HTTPNoContent,
-      '205' => HTTPResetContent,
-      '206' => HTTPPartialContent,
-
-      '300' => HTTPMultipleChoice,
-      '301' => HTTPMovedPermanently,
-      '302' => HTTPFound,
-      '303' => HTTPSeeOther,
-      '304' => HTTPNotModified,
-      '305' => HTTPUseProxy,
-      '307' => HTTPTemporaryRedirect,
-
-      '400' => HTTPBadRequest,
-      '401' => HTTPUnauthorized,
-      '402' => HTTPPaymentRequired,
-      '403' => HTTPForbidden,
-      '404' => HTTPNotFound,
-      '405' => HTTPMethodNotAllowed,
-      '406' => HTTPNotAcceptable,
-      '407' => HTTPProxyAuthenticationRequired,
-      '408' => HTTPRequestTimeOut,
-      '409' => HTTPConflict,
-      '410' => HTTPGone,
-      '411' => HTTPLengthRequired,
-      '412' => HTTPPreconditionFailed,
-      '413' => HTTPRequestEntityTooLarge,
-      '414' => HTTPRequestURITooLong,
-      '415' => HTTPUnsupportedMediaType,
-      '416' => HTTPRequestedRangeNotSatisfiable,
-      '417' => HTTPExpectationFailed,
-
-      '500' => HTTPInternalServerError,
-      '501' => HTTPNotImplemented,
-      '502' => HTTPBadGateway,
-      '503' => HTTPServiceUnavailable,
-      '504' => HTTPGatewayTimeOut,
-      '505' => HTTPVersionNotSupported
-    }
 
     class << self
       def read_new(sock)   #:nodoc: internal use only
