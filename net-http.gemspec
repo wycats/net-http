@@ -10,7 +10,7 @@ Gem::Specification.new do |s|
   s.email       = ["wycats@gmail.com"]
   s.homepage    = "http://www.yehudakatz.com"
   s.summary     = %q{A number of improvements to Net::HTTP}
-  s.description = File.read(File.expand_path("../README", __FILE__))
+  s.description = File.read(File.expand_path("../README.markdown", __FILE__))
 
   s.rubyforge_project = "net-http"
 
