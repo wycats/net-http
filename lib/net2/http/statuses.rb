@@ -37,14 +37,17 @@ module Net2
         klass.const_set :HAS_BODY, options.key?(:body) ? options[:body] : self::HAS_BODY
         klass.const_set :EXCEPTION_TYPE, options[:error] || self::EXCEPTION_TYPE
 
+        # for backwards compatibility with Net::HTTP
+        Net2.const_set "HTTP#{name}", klass
+
+        return unless code
+
         if code < 100
           CODE_CLASS_TO_OBJ[code.to_s] = klass
         else
           CODE_TO_OBJ[code.to_s] = klass
         end
 
-        # for backwards compatibility with Net::HTTP
-        Net2.const_set "HTTP#{name}", klass
       end
     end
 
