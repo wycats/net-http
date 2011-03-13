@@ -11,16 +11,20 @@ module Net2
       attr_reader :response
       alias data response    #:nodoc: obsolete
     end
+
     class Error < ProtocolError
       include Exceptions
     end
+
     class RetriableError < ProtoRetriableError
       include Exceptions
     end
+
     class ServerException < ProtoServerError
       # We cannot use the name "HTTPServerError", it is the name of the response.
       include Exceptions
     end
+
     class FatalError < ProtoFatalError
       include Exceptions
     end
@@ -33,89 +37,62 @@ module Net2
 
         names.each do |name|
           klass = HTTP.const_set name, Class.new(self)
-          klass.const_set :HAS_BODY, options.key?(:body) ? options[:body] : self::BODY
+          klass.const_set :HAS_BODY, options.key?(:body) ? options[:body] : self::HAS_BODY
           klass.const_set :EXCEPTION_TYPE, options[:error] || self::EXCEPTION_TYPE
+
+          # for backwards compatibility with Net::HTTP
+          Net2.const_set "HTTP#{name}", klass
         end
       end
     end
 
-    Response.subclass :Information,               :body => false, :error => Error
-    Response.subclass :UnknownResponse, :Success, :body => true, :error => Error
-    Response.subclass :Redirection,               :body => true, :error => RetriableError
-    Response.subclass :ClientError,               :body => true, :error => ServerException
-    Response.subclass :ServerError,               :body => true, :error => FatalError
+    Response.subclass     :Information,               :body => false, :error => Error
+    Response.subclass     :UnknownResponse, :Success, :body => true, :error => Error
+    Response.subclass     :Redirection,               :body => true, :error => RetriableError
+    Response.subclass     :ClientError,               :body => true, :error => ServerException
+    Response.subclass     :ServerError,               :body => true, :error => FatalError
 
+    #                      100        101
+    Information.subclass  :Continue, :SwitchProtocol
 
-    class Continue < Information           # 100
-      HAS_BODY = false
-    end
-    class SwitchProtocol < Information                # 101
-      HAS_BODY = false
-    end
+    #                      200  201       202        203                           206
+    Success.subclass      :OK, :Created, :Accepted, :NonAuthoritativeInformation, :PartialContent
 
-    class OK < Success; end                               # 200
-    class Created < Success; end                          # 201
-    class Accepted < Success; end                         # 202
-    class NonAuthoritativeInformation < Success; end      # 203
+    #                      204         205
+    Success.subclass      :NoContent, :ResetContent,  :body => false
 
-    class NoContent < Success                             # 204
-      HAS_BODY = false
-    end
+    #                      300              301                302     303        307
+    Redirection.subclass  :MultipleChoice, :MovedPermanently, :Found, :SeeOther, :TemporaryRedirect
 
-    class ResetContent < Success                          # 205
-      HAS_BODY = false
-    end
+    # 306 unused
 
-    class PartialContent < Success; end                   # 206
-
-    class MultipleChoice < Redirection; end               # 300
-    class MovedPermanently < Redirection; end             # 301
-    class Found < Redirection; end                        # 302
+    #                      # 304         305
+    Redirection.subclass  :NotModified, :UseProxy,    :body => false
 
     MovedTemporarily = Found
 
-    class SeeOther < Redirection; end                     # 303
+    #                      400          401            402               403         404
+    ClientError.subclass  :BadRequest, :Unauthorized, :PaymentRequired, :Forbidden, :NotFound,
 
-    class NotModified < Redirection                       # 304
-      HAS_BODY = false
-    end
+    #                      405                406             407
+                          :MethodNotAllowed, :NotAcceptable, :ProxyAuthenticationRequired,
 
-    class UseProxy < Redirection                          # 305
-      HAS_BODY = false
-    end
+    #                      408              409        410    411              412
+                          :RequestTimeOut, :Conflict, :Gone, :LengthRequired, :PreconditionFailed,
 
-                                                          # 306 unused
+    #                      413                     414                 415
+                          :RequestEntityTooLarge, :RequestURITooLong, :UnsupportedMediaType,
 
-    class TemporaryRedirect < Redirection; end            # 307
-
-    class BadRequest < ClientError; end                   # 400
-    class Unauthorized < ClientError; end                 # 401
-    class PaymentRequired < ClientError; end              # 402
-    class Forbidden < ClientError; end                    # 403
-    class NotFound < ClientError; end                     # 404
-    class MethodNotAllowed < ClientError; end             # 405
-    class NotAcceptable < ClientError; end                # 406
-    class ProxyAuthenticationRequired < ClientError; end  # 407
-    class RequestTimeOut < ClientError; end               # 408
-    class Conflict < ClientError; end                     # 409
-    class Gone < ClientError; end                         # 410
-    class LengthRequired < ClientError; end               # 411
-    class PreconditionFailed < ClientError; end           # 412
-    class RequestEntityTooLarge < ClientError; end        # 413
-    class RequestURITooLong < ClientError; end            # 414
+    #                      416                            417
+                          :RequestedRangeNotSatisfiable, :ExpectationFailed
 
     RequestURITooLarge = RequestURITooLong
 
-    class UnsupportedMediaType < ClientError; end         # 415
-    class RequestedRangeNotSatisfiable < ClientError; end # 416
-    class ExpectationFailed < ClientError; end            # 417
+    #                      500                   501              502          503
+    ServerError.subclass  :InternalServerError, :NotImplemented, :BadGateway, :ServiceUnavailable,
 
-    class InternalServerError < ServerError; end          # 500
-    class NotImplemented < ServerError; end               # 501
-    class BadGateway < ServerError; end                   # 502
-    class ServiceUnavailable < ServerError; end           # 503
-    class GatewayTimeOut < ServerError; end               # 504
-    class VersionNotSupported < ServerError; end          # 505
+    #                      504              505
+                          :GatewayTimeOut, :VersionNotSupported
   end
 
   # :startdoc:
@@ -125,59 +102,4 @@ module Net2
   HTTPRetriableError = HTTP::RetriableError
   HTTPServerException = HTTP::ServerException
   HTTPFatalError = HTTP::FatalError
-
-  # :stopdoc:
-
-  HTTPUnknownResponse = HTTP::UnknownResponse
-  HTTPInformation = HTTP::Information
-  HTTPSuccess = HTTP::Success
-  HTTPRedirection = HTTP::Redirection
-  HTTPClientError = HTTP::ClientError
-  HTTPServerError = HTTP::ServerError
-
-  HTTPContinue = HTTP::Continue
-  HTTPSwitchProtocol = HTTP::SwitchProtocol
-  HTTPOK = HTTP::OK
-  HTTPCreated = HTTP::Created
-  HTTPAccepted = HTTP::Accepted
-  HTTPNonAuthoritativeInformation = HTTP::NonAuthoritativeInformation
-  HTTPNoContent = HTTP::NoContent
-  HTTPResetContent = HTTP::ResetContent
-  HTTPPartialContent = HTTP::PartialContent
-  HTTPMultipleChoice = HTTP::MultipleChoice
-  HTTPMovedPermanently = HTTP::MovedPermanently
-  HTTPFound = HTTP::Found
-
-  HTTPMovedTemporarily = HTTPFound
-
-  HTTPSeeOther = HTTP::SeeOther
-  HTTPNotModified = HTTP::NotModified
-  HTTPUseProxy = HTTP::UseProxy
-  HTTPTemporaryRedirect = HTTP::TemporaryRedirect
-  HTTPBadRequest = HTTP::BadRequest
-  HTTPUnauthorized = HTTP::Unauthorized
-  HTTPPaymentRequired = HTTP::PaymentRequired
-  HTTPForbidden = HTTP::Forbidden
-  HTTPNotFound = HTTP::NotFound
-  HTTPMethodNotAllowed = HTTP::MethodNotAllowed
-  HTTPNotAcceptable = HTTP::NotAcceptable
-  HTTPProxyAuthenticationRequired = HTTP::ProxyAuthenticationRequired
-  HTTPRequestTimeOut = HTTP::RequestTimeOut
-  HTTPConflict = HTTP::Conflict
-  HTTPGone = HTTP::Gone
-  HTTPLengthRequired = HTTP::LengthRequired
-  HTTPPreconditionFailed = HTTP::PreconditionFailed
-  HTTPRequestEntityTooLarge = HTTP::RequestEntityTooLarge
-  HTTPRequestURITooLong = HTTP::RequestURITooLong
-  HTTPRequestURITooLarge = HTTPRequestURITooLong
-  HTTPUnsupportedMediaType = HTTP::UnsupportedMediaType
-  HTTPRequestedRangeNotSatisfiable = HTTP::RequestedRangeNotSatisfiable
-  HTTPExpectationFailed = HTTP::ExpectationFailed
-  HTTPInternalServerError = HTTP::InternalServerError
-  HTTPNotImplemented = HTTP::NotImplemented
-  HTTPBadGateway = HTTP::BadGateway
-  HTTPServiceUnavailable = HTTP::ServiceUnavailable
-  HTTPGatewayTimeOut = HTTP::GatewayTimeOut
-  HTTPVersionNotSupported = HTTP::VersionNotSupported
-
 end
