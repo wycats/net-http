@@ -434,7 +434,9 @@ module Net2   #:nodoc:
     #    print Net::HTTP.get('www.example.com', '/index.html')
     #
     def self.get(uri_or_host, path = nil, port = nil)
-      get_response(uri_or_host, path, port).body
+      get_response(uri_or_host, path, port) do |response|
+        return response.body
+      end
     end
 
     # Sends a GET request to the target and returns the HTTP response
@@ -452,15 +454,14 @@ module Net2   #:nodoc:
     def self.get_response(uri_or_host, path = nil, port = nil, &block)
       if path
         host = uri_or_host
-        new(host, port || HTTP.default_port).start {|http|
-          return http.request_get(path, &block)
-        }
       else
-        uri = uri_or_host
-        new(uri.hostname, uri.port).start {|http|
-          return http.request_get(uri.request_uri, &block)
-        }
+        host = uri_or_host.hostname
+        port = uri_or_host.port
+        path = uri_or_host.request_uri
       end
+
+      http = new(host, port || HTTP.default_port).start
+      http.request_get(path, &block)
     end
 
     # Posts HTML form data to the specified URI object.
@@ -485,9 +486,14 @@ module Net2   #:nodoc:
       req = Post.new(url.path)
       req.form_data = params
       req.basic_auth url.user, url.password if url.user
-      new(url.host, url.port).start {|http|
-        http.request(req)
-      }
+      new(url.host, url.port).start do |http|
+        response = http.request(req)
+
+        # we're using the block form, so make sure to read the
+        # body before the socket is closed.
+        response.read_body
+        response
+      end
     end
 
     #
@@ -1310,9 +1316,14 @@ module Net2   #:nodoc:
       begin
         res = HTTPResponse.read_new(@socket)
       end while res.kind_of?(HTTPContinue)
-      res.reading_body(@socket, req.response_body_permitted?) {
-        yield res if block_given?
-      }
+
+      res.request = req
+
+      if block_given?
+        res.reading_body(req.response_body_permitted?) do
+          yield res
+        end
+      end
       end_transport req, res
       res
     rescue => exception
@@ -1333,12 +1344,12 @@ module Net2   #:nodoc:
       @curr_http_version = res.http_version
       if @socket.closed?
         D 'Conn socket closed'
-      elsif not res.body and @close_on_empty_response
+      elsif @close_on_empty_response && !res.body
         D 'Conn close'
         @socket.close
       elsif keep_alive?(req, res)
         D 'Conn keep-alive'
-      else
+      elsif block_given?
         D 'Conn close'
         @socket.close
       end

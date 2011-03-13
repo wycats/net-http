@@ -8,18 +8,19 @@ module Net2
         def read_new(sock)   #:nodoc: internal use only
           httpv, code, msg = read_status_line(sock)
           res = response_class(code).new(httpv, code, msg)
-          each_response_header(sock) do |k,v|
-            res.add_field k, v
-          end
+
+          each_response_header(sock) { |k,v| res.add_field k, v }
+          res.socket = sock
+
           res
         end
 
-        private
+      private
 
         def read_status_line(sock)
           str = sock.readline
-          m = /\AHTTP(?:\/(\d+\.\d+))?\s+(\d\d\d)\s*(.*)\z/in.match(str) or
-            raise HTTPBadResponse, "wrong status line: #{str.dump}"
+          m = /\AHTTP(?:\/(\d+\.\d+))?\s+(\d\d\d)\s*(.*)\z/in.match(str)
+          raise HTTPBadResponse, "wrong status line: #{str.dump}" unless m
           m.captures
         end
 
@@ -53,13 +54,10 @@ module Net2
               raise HTTPBadResponse, 'wrong header line format' if value.nil?
             end
           end
+
           yield key, value if key
         end
       end
-
-      # next is to fix bug in RDoc, where the private inside class << self
-      # spills out.
-      public
 
       include HTTPHeader
 
@@ -67,6 +65,7 @@ module Net2
         @http_version = httpv
         @code         = code
         @message      = msg
+
         initialize_http_header nil
         @body = nil
         @read = false
@@ -79,6 +78,10 @@ module Net2
       # determine the response type by examining which response subclass
       # the response object is an instance of.
       attr_reader :code
+
+      attr_accessor :socket
+
+      attr_accessor :request
 
       # The HTTP result message sent by the server. For example, 'Not Found'.
       attr_reader :message
@@ -132,15 +135,19 @@ module Net2
       # body
       #
 
-      def reading_body(sock, reqmethodallowbody)  #:nodoc: internal use only
-        @socket = sock
-        @body_exist = reqmethodallowbody && self.class.body_permitted?
+      def reading_body(request_allows_body)  #:nodoc: internal use only
+        #@socket = sock
+        @body_exist = request_allows_body && self.class.body_permitted?
         begin
           yield
           self.body   # ensure to read body
         ensure
           @socket = nil
         end
+      end
+
+      def body_exist?
+        request.response_body_permitted? && self.class.body_permitted?
       end
 
       # Gets the entity body returned by the remote HTTP server.
@@ -174,7 +181,7 @@ module Net2
         end
         to = procdest(dest, block)
         stream_check
-        if @body_exist
+        if body_exist?
           read_body_0 to
           @body = to
         else
