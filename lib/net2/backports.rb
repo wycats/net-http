@@ -33,6 +33,7 @@ end
 module OpenSSL
   module Buffering
 
+    # TODO: Make this raise EWOULDBLOCK instead of blocking
     def read_nonblock(maxlen, buf=nil)
       if maxlen == 0
         if buf
@@ -42,6 +43,7 @@ module OpenSSL
           return ""
         end
       end
+
       if @rbuffer.empty?
         return sysread(maxlen, buf)
       end
