@@ -29,17 +29,27 @@ module Net2
           HTTPUnknownResponse
         end
 
+        # Read the beginning of the response, looking for headers
         def each_response_header(sock)
           key = value = nil
+
           while true
-            line = sock.readuntil("\n", true).sub(/\s+\z/, '')
+            # read until a newline
+            line = sock.readuntil("\n", true).rstrip
+
+            # empty line means we're done with headers
             break if line.empty?
-            if line[0] == ?\s or line[0] == ?\t and value
+
+            first = line[0]
+            line.strip!
+
+            # initial whitespace means it's part of the last header
+            if first == ?\s || first == ?\t && value
               value << ' ' unless value.empty?
-              value << line.strip
+              value << line
             else
               yield key, value if key
-              key, value = line.strip.split(/\s*:\s*/, 2)
+              key, value = line.split(/\s*:\s*/, 2)
               raise HTTPBadResponse, 'wrong header line format' if value.nil?
             end
           end
