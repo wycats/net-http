@@ -28,6 +28,17 @@ if RUBY_VERSION < "1.9"
   require "net2/backports"
 end
 
+module URI
+  class Generic
+    unless URI::Generic.allocate.respond_to?(:hostname)
+      def hostname
+        v = self.host
+        /\A\[(.*)\]\z/ =~ v ? $1 : v
+      end
+    end
+  end
+end
+
 module Net2   #:nodoc:
 
   # :stopdoc:
@@ -452,12 +463,15 @@ module Net2   #:nodoc:
     #    print res.body
     #
     def self.get_response(uri_or_host, path = nil, port = nil, &block)
-      if path
-        host = uri_or_host
-      else
+      if uri_or_host.respond_to?(:hostname)
         host = uri_or_host.hostname
         port = uri_or_host.port
         path = uri_or_host.request_uri
+      elsif path
+        host = uri_or_host
+      else
+        uri = URI.parse(uri_or_host)
+        return get_response(uri, &block)
       end
 
       http = new(host, port || HTTP.default_port).start

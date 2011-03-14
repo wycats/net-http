@@ -1,7 +1,20 @@
 This repo contains a number of experimental modifications to the version of Net::HTTP that ships with Ruby 1.9. TODOs:
 
 * <del>Porting the code to work on Ruby 1.8</del>
-* Add missing tests for features, including gzip
-* Fixing gzip when using requests that a block as an iterator
-* Adding support for getting the response as a stream, rather than having to read the entire body at once.
+* <del>Fix gzip in GET requests when using a block as iterator</del>
+* <del>Add support for gzip and deflate responses from any request</del>
+* <del>Add support for incremental gzip and deflate with chunked
+  encoding</del>
+* <del>Add support for leaving the socket open when making a request, so
+  it's possible to make requests that do not block on the body being
+  returned</del>
+* <del>Clean up tests so that it's possible to combine tests for
+  features, instead of using brittle checks for specific classes</del>
+* <del>Add support for Net::HTTP.get(path), instead of needing to pass a
+  URI or deconstruct the URL yourself</del>
+* In keepalive situations, make sure to read any remaining body from the
+  socket before initiating a new connection.
+* Add support for partial reads from the response
+* Document and clean up the semantics of when #body can be called after
+  a request
 * Other features as I think of them

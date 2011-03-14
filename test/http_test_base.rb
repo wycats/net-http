@@ -3,6 +3,12 @@ module TestNetHTTP_version_1_1_methods
   def test_s_get
     assert_equal $test_net_http_data,
         Net::HTTP.get(config('host'), '/', config('port'))
+
+    assert_equal $test_net_http_data,
+        Net::HTTP.get("http://#{config('host')}:#{config('port')}/")
+
+    assert_equal $test_net_http_data,
+        Net::HTTP.get(URI.parse("http://#{config('host')}:#{config('port')}/"))
   end
 
   def test_head
