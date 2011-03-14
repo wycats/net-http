@@ -1,4 +1,5 @@
 require "net2/http/header"
+require "net2/http/gzip"
 
 module Net2
   class HTTP
@@ -131,21 +132,6 @@ module Net2
         self
       end
 
-      #
-      # body
-      #
-
-      def reading_body(request_allows_body)  #:nodoc: internal use only
-        #@socket = sock
-        @body_exist = request_allows_body && self.class.body_permitted?
-        begin
-          yield
-          self.body   # ensure to read body
-        ensure
-          @socket = nil
-        end
-      end
-
       def body_exist?
         request.response_body_permitted? && self.class.body_permitted?
       end
@@ -208,6 +194,8 @@ module Net2
       #
       def body
         read_body()
+        return @body if @body.is_a?(String)
+        return @body.string if @body.respond_to?(:string)
       end
 
       # Because it may be necessary to modify the body, Eg, decompression
@@ -242,13 +230,14 @@ module Net2
         len = nil
         total = 0
         while true
-          line = @socket.readline
+          line = @socket.readuntil("\r\n")
           hexlen = line.slice(/[0-9a-fA-F]+/) or
               raise HTTPBadResponse, "wrong chunk size line: #{line}"
           len = hexlen.hex
           break if len == 0
           begin
-            @socket.read len, dest
+            result = @socket.read len
+            dest << result
           ensure
             total += len
             @socket.read 2   # \r\n
@@ -257,19 +246,61 @@ module Net2
         until @socket.readline.empty?
           # none
         end
+      ensure
+        dest.close if dest.respond_to?(:close)
       end
 
       def stream_check
         raise IOError, 'attempt to read body out of block' if @socket.closed?
       end
 
+      class DecompressionAdapter
+        attr_reader :string
+
+        def initialize(buffer)
+          @buffer = buffer
+          @string = ""
+        end
+
+        def <<(chunk)
+          result = inflater.inflate(chunk)
+          @string << result
+          @buffer << result
+        end
+
+        def close
+          inflater.close
+        end
+      end
+
+      class GzipAdapter < DecompressionAdapter
+        def inflater
+          @inflater ||= Net2::GzipInflater.new
+        end
+      end
+
+      class InflateAdapter < DecompressionAdapter
+        def inflater
+          @inflater ||= Zlib::Inflate.new
+        end
+      end
+
       def procdest(dest, block)
         raise ArgumentError, 'both arg and block given for HTTP method' \
             if dest and block
         if block
-          ReadAdapter.new(block)
+          wrapped_dest = ReadAdapter.new(block)
         else
-          dest || ''
+          wrapped_dest = dest || ''
+        end
+
+        case self["Content-Encoding"]
+        when "gzip"
+          GzipAdapter.new(wrapped_dest)
+        when "deflate"
+          InflateAdapter.new(wrapped_dest)
+        else
+          wrapped_dest
         end
       end
 

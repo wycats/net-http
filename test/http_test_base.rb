@@ -46,7 +46,7 @@ module TestNetHTTP_version_1_1_methods
     res = http.get('/') {|s| buf << s }
     assert_kind_of Net::HTTPResponse, res
     # assert_kind_of String, res.body
-    unless self.is_a?(TestNetHTTP_v1_2_chunked)
+    if !chunked? && !gzip?
       assert_not_nil res['content-length']
       assert_equal $test_net_http_data.size, res['content-length'].to_i
     end
@@ -62,7 +62,7 @@ module TestNetHTTP_version_1_1_methods
     res = http.get('/') {|s| buf << s }
     assert_kind_of Net::HTTPResponse, res
     # assert_kind_of String, res.body
-    unless self.is_a?(TestNetHTTP_v1_2_chunked)
+    if !chunked? && !gzip?
       assert_not_nil res['content-length']
       assert_equal $test_net_http_data.size, res['content-length'].to_i
     end
@@ -88,7 +88,7 @@ module TestNetHTTP_version_1_1_methods
     res = new().get('/')
     assert_kind_of Net::HTTPResponse, res
     assert_kind_of String, res.body
-    unless defined?(TestNetHTTP_v1_2_chunked) && self.is_a?(TestNetHTTP_v1_2_chunked)
+    if !chunked? && !gzip?
       assert_not_nil res['content-length']
     end
     assert_equal $test_net_http_data_type, res['Content-Type']
@@ -231,7 +231,7 @@ module TestNetHTTP_version_1_2_methods
     req = Net::HTTP::Get.new('/')
     http.request(req) {|res|
       assert_kind_of Net::HTTPResponse, res
-      unless self.is_a?(TestNetHTTP_v1_2_chunked)
+      if !chunked? && !gzip?
         assert_not_nil res['content-length']
         assert_equal $test_net_http_data.size, res['content-length'].to_i
       end
@@ -255,7 +255,7 @@ module TestNetHTTP_version_1_2_methods
     req = Net::HTTP::Head.new('/')
     http.request(req) {|res|
       assert_kind_of Net::HTTPResponse, res
-      unless self.is_a?(TestNetHTTP_v1_2_chunked)
+      if !chunked? && !gzip?
         assert_not_nil res['content-length']
         assert_equal $test_net_http_data.size, res['content-length'].to_i
       end
@@ -269,7 +269,7 @@ module TestNetHTTP_version_1_2_methods
     req['Accept'] = $test_net_http_data_type
     http.request(req, data) {|res|
       assert_kind_of Net::HTTPResponse, res
-      unless self.is_a?(TestNetHTTP_v1_2_chunked)
+      if !chunked? && !gzip?
         assert_equal data.size, res['content-length'].to_i
       end
       assert_kind_of String, res.body

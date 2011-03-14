@@ -12,7 +12,7 @@ Net = Net2
 
 class String
   def encoding_aware?
-    respond_to? :force_encoding
+    respond_to? :encoding
   end
 end
 
@@ -114,6 +114,7 @@ module TestNetHTTPUtils
       if @gzip
         res['Content-Encoding'] = 'gzip'
         io = StringIO.new
+        io.set_encoding "BINARY" if io.respond_to?(:set_encoding)
         gz = Zlib::GzipWriter.new(io)
         gz.write raw_body
         gz.close

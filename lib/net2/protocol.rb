@@ -86,11 +86,13 @@ module Net2 # :nodoc:
       read_bytes = 0
       begin
         while read_bytes + @rbuf.size < len
-          dest << (s = rbuf_consume(@rbuf.size))
+          s = rbuf_consume(@rbuf.size)
+          dest << s
           read_bytes += s.size
           rbuf_fill
         end
-        dest << (s = rbuf_consume(len - read_bytes))
+        s = rbuf_consume(len - read_bytes)
+        dest << s
         read_bytes += s.size
       rescue EOFError
         raise unless ignore_eof
