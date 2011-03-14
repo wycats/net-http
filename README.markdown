@@ -12,8 +12,8 @@ This repo contains a number of experimental modifications to the version of Net:
   features, instead of using brittle checks for specific classes</del>
 * <del>Add support for Net::HTTP.get(path), instead of needing to pass a
   URI or deconstruct the URL yourself</del>
-* In keepalive situations, make sure to read any remaining body from the
-  socket before initiating a new connection.
+* <del>In keepalive situations, make sure to read any remaining body from the
+  socket before initiating a new connection.</del>
 * Add support for partial reads from the response
 * Document and clean up the semantics of when #body can be called after
   a request

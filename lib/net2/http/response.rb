@@ -173,9 +173,18 @@ module Net2
         else
           @body = nil
         end
-        @read = true
+        @read = @closed = true
 
         @body
+      end
+
+      # When using the same connection for multiple requests, a response
+      # must be closed before the next request can be initiated. Closing
+      # a response ensures that all of the expected body has been read
+      # from the socket.
+      def close
+        return if @closed
+        read_body
       end
 
       # Returns the full entity body.
@@ -193,7 +202,7 @@ module Net2
       #   }
       #
       def body
-        read_body()
+        read_body
         return @body if @body.is_a?(String)
         return @body.string if @body.respond_to?(:string)
       end

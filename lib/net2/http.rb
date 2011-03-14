@@ -430,6 +430,7 @@ module Net2   #:nodoc:
         res.read_body do |chunk|
           $stdout.print chunk
         end
+        res.close
       end
       nil
     end
@@ -505,7 +506,7 @@ module Net2   #:nodoc:
 
         # we're using the block form, so make sure to read the
         # body before the socket is closed.
-        response.read_body
+        response.close
         response
       end
     end
@@ -1024,6 +1025,7 @@ module Net2   #:nodoc:
       request(Get.new(path, initheader)) do |r|
         response = r
         r.read_body(dest, &block)
+        r.close
       end
 
       response
@@ -1262,6 +1264,22 @@ module Net2   #:nodoc:
     # This method never raises Net::* exceptions.
     #
     def request(req, body = nil, &block)  # :yield: +response+
+      # If a request is made, and the connection hasn't been started,
+      # wrap the request in a start block, which will create a new
+      # connection and read the body so that it can close the socket.
+      #
+      # If you want to make several requests reusing the same
+      # connection, use Net::HTTP.start:
+      #
+      #     Net::HTTP.start(host, port) do |http|
+      #       http.get("/path") do |chunk|
+      #
+      #       end
+      #
+      #       http.get("/another_path") do |chunk|
+      #
+      #       end
+      #     end
       unless started?
         start {
           req['connection'] ||= 'close'
@@ -1288,6 +1306,7 @@ module Net2   #:nodoc:
       res = nil
       request(type.new(path, initheader), data) {|r|
         r.read_body dest, &block
+        r.close
         res = r
       }
       res
@@ -1295,6 +1314,7 @@ module Net2   #:nodoc:
 
     def transport_request(req)
       begin_transport req
+
       req.exec @socket, @curr_http_version, edit_path(req.path)
       begin
         res = HTTPResponse.read_new(@socket)
@@ -1304,9 +1324,10 @@ module Net2   #:nodoc:
 
       if block_given?
         yield res
-        res.read_body
+        res.close
       end
       end_transport req, res, block_given?
+      @current_response = res
       res
     rescue => exception
       D "Conn close because of error #{exception}"
@@ -1315,11 +1336,23 @@ module Net2   #:nodoc:
     end
 
     def begin_transport(req)
-      connect if @socket.closed?
+      if @socket.closed?
+        connect
+      else
+        # Make sure that the current response is closed. A response would
+        # be open if the request was made without a block, and the client
+        # never read the body. In this situation, we need to read the
+        # expected body in order to continue to use the same connection.
+        @current_response.close if @current_response
+      end
+
+      # If close_on_empty_response is set, and the response is not
+      # allowed to have a body (i.e. HEAD requests), turn off keepalive
       if not req.response_body_permitted? and @close_on_empty_response
         req['connection'] ||= 'close'
       end
-      req['host'] ||= addr_port()
+
+      req['host'] ||= addr_port
     end
 
     def end_transport(req, res, block_form)
@@ -1382,9 +1415,9 @@ module Net2   #:nodoc:
 
     def addr_port
       if use_ssl?
-        address() + (port == HTTP.https_default_port ? '' : ":#{port()}")
+        address + (port == HTTP.https_default_port ? '' : ":#{port()}")
       else
-        address() + (port == HTTP.http_default_port ? '' : ":#{port()}")
+        address + (port == HTTP.http_default_port ? '' : ":#{port()}")
       end
     end
 
