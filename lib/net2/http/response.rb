@@ -236,27 +236,31 @@ module Net2
       end
 
       def read_chunked(dest)
-        len = nil
-        total = 0
-        while true
-          line = @socket.readuntil("\r\n")
-          hexlen = line.slice(/[0-9a-fA-F]+/) or
-              raise HTTPBadResponse, "wrong chunk size line: #{line}"
-          len = hexlen.hex
-          break if len == 0
-          begin
-            result = @socket.read len
-            dest << result
-          ensure
-            total += len
-            @socket.read 2   # \r\n
-          end
+        while result = read_chunk
+          dest << result
         end
-        until @socket.readline.empty?
-          # none
-        end
+
+        next until @socket.readline.empty?
       ensure
         dest.close if dest.respond_to?(:close)
+      end
+
+      def read_chunk
+        return nil if @read
+
+        line = @socket.readuntil("\r\n")
+        hexlen = line.slice(/[0-9a-fA-F]+/)
+        raise HTTPBadResponse, "wrong chunk size line: #{line}" unless hexlen
+        len = hexlen.hex
+
+        if len.zero?
+          @read = @closed = true
+          return nil
+        end
+
+        @socket.read len
+      ensure
+        @socket.read(2) unless len.zero?
       end
 
       def stream_check
