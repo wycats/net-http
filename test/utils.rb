@@ -38,6 +38,14 @@ module TestNetHTTPUtils
     self.class::CONFIG[key]
   end
 
+  def chunked?
+    config("chunked")
+  end
+
+  def gzip?
+    config("gzip")
+  end
+
   def logfile
     $DEBUG ? $stderr : NullWriter.new
   end

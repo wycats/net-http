@@ -10,7 +10,7 @@ module TestNetHTTP_version_1_1_methods
       res = http.head('/')
       assert_kind_of Net::HTTPResponse, res
       assert_equal $test_net_http_data_type, res['Content-Type']
-      unless defined?(TestNetHTTP_v1_2_chunked) && self.is_a?(TestNetHTTP_v1_2_chunked)
+      if !chunked? && !gzip?
         assert_equal $test_net_http_data.size, res['Content-Length'].to_i
       end
     }
@@ -28,7 +28,7 @@ module TestNetHTTP_version_1_1_methods
     res = http.get('/')
     assert_kind_of Net::HTTPResponse, res
     assert_kind_of String, res.body
-    unless defined?(TestNetHTTP_v1_2_chunked) && self.is_a?(TestNetHTTP_v1_2_chunked)
+    if !chunked? && !gzip?
       assert_not_nil res['content-length']
       assert_equal $test_net_http_data.size, res['content-length'].to_i
     end
@@ -101,7 +101,7 @@ module TestNetHTTP_version_1_1_methods
       http.get2('/') {|res|
         assert_kind_of Net::HTTPResponse, res
         assert_kind_of Net::HTTPResponse, res.header
-        unless defined?(TestNetHTTP_v1_2_chunked) && self.is_a?(TestNetHTTP_v1_2_chunked)
+        if !chunked? && !gzip?
           assert_not_nil res['content-length']
         end
         assert_equal $test_net_http_data_type, res['Content-Type']
@@ -207,7 +207,9 @@ module TestNetHTTP_version_1_2_methods
       # _test_request__range http   # WEBrick does not support Range: header.
       _test_request__HEAD http
       _test_request__POST http
-      _test_request__stream_body http
+      _test_request__stream_body http, :body_stream=
+      _test_request__stream_body http, :body=
+
     }
   end
 
@@ -216,7 +218,7 @@ module TestNetHTTP_version_1_2_methods
     http.request(req) {|res|
       assert_kind_of Net::HTTPResponse, res
       assert_kind_of String, res.body
-      unless defined?(TestNetHTTP_v1_2_chunked) && self.is_a?(TestNetHTTP_v1_2_chunked)
+      if !chunked? && !gzip?
         assert_not_nil res['content-length']
         assert_equal $test_net_http_data.size, res['content-length'].to_i
       end
@@ -275,11 +277,11 @@ module TestNetHTTP_version_1_2_methods
     }
   end
 
-  def _test_request__stream_body(http)
+  def _test_request__stream_body(http, method = :body_stream=)
     req = Net::HTTP::Post.new('/')
     data = $test_net_http_data
     req.content_length = data.size
-    req.body_stream = StringIO.new(data)
+    req.send method, StringIO.new(data)
     res = http.request(req)
     assert_kind_of Net::HTTPResponse, res
     assert_kind_of String, res.body
@@ -297,7 +299,7 @@ module TestNetHTTP_version_1_2_methods
   def _test_send_request__GET(http)
     res = http.send_request('GET', '/')
     assert_kind_of Net::HTTPResponse, res
-    unless defined?(TestNetHTTP_v1_2_chunked) && self.is_a?(TestNetHTTP_v1_2_chunked)
+    if !chunked? && !gzip?
       assert_equal $test_net_http_data.size, res['content-length'].to_i
     end
     assert_kind_of String, res.body
