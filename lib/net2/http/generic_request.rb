@@ -1,4 +1,5 @@
 require "net2/http/header"
+require "rbconfig"
 
 module Net2
   class HTTP
@@ -11,19 +12,30 @@ module Net2
 
       include Header
 
-      def initialize(m, reqbody, resbody, path, initheader = nil)
-        @method = m
-        @request_has_body = reqbody
-        @response_has_body = resbody
+      config = Config::CONFIG
+      engine = defined?(RUBY_ENGINE) ? RUBY_ENGINE : "ruby"
+
+      HTTP_ACCEPT_ENCODING = "gzip;q=1.0,deflate;q=0.6,identity;q=0.3" if HAVE_ZLIB
+      HTTP_ACCEPT          = "*/*"
+      HTTP_USER_AGENT      = "Ruby/#{RUBY_VERSION} (#{engine}) #{RUBY_DESCRIPTION}"
+
+      def initialize(m, req_body_allowed, resp_body_allowed, path, headers = nil)
         raise ArgumentError, "no HTTP request path given" unless path
         raise ArgumentError, "HTTP request path is empty" if path.empty?
+
+        @method = m
         @path = path
-        initialize_http_header initheader
-        self['Accept'] ||= '*/*'
-        self['User-Agent'] ||= 'Ruby'
-        @body = nil
-        @body_stream = nil
-        @body_data = nil
+
+        @request_has_body = req_body_allowed
+        @response_has_body = resp_body_allowed
+
+        self.headers = headers
+
+        self['Accept-Encoding'] ||= HTTP_ACCEPT_ENCODING if HTTP_ACCEPT_ENCODING
+        self['Accept']          ||= HTTP_ACCEPT
+        self['User-Agent']      ||= HTTP_USER_AGENT
+
+        @body = @body_stream = @body_data = nil
       end
 
       attr_reader :method
@@ -49,6 +61,8 @@ module Net2
       attr_reader :body
 
       def body=(str)
+        return self.body_stream = str if str.respond_to?(:read)
+
         @body = str
         @body_stream = nil
         @body_data = nil
@@ -75,11 +89,11 @@ module Net2
 
       def exec(sock, ver, path)   #:nodoc: internal use only
         if @body
-          send_request_with_body sock, ver, path, @body
+          request_with_body sock, ver, path
         elsif @body_stream
-          send_request_with_body_stream sock, ver, path, @body_stream
+          request_with_stream sock, ver, path
         elsif @body_data
-          send_request_with_body_data sock, ver, path, @body_data
+          request_with_data sock, ver, path
         else
           write_header sock, ver, path
         end
@@ -87,24 +101,43 @@ module Net2
 
       private
 
-      def send_request_with_body(sock, ver, path, body)
+      def supply_default_content_type
+        return if content_type
+        warn 'net/http: warning: Content-Type did not set; using application/x-www-form-urlencoded' if $VERBOSE
+        set_content_type 'application/x-www-form-urlencoded'
+      end
+
+      def write_header(sock, ver, path)
+        buf = "#{@method} #{path} HTTP/#{ver}\r\n"
+        each_capitalized do |k,v|
+          buf << "#{k}: #{v}\r\n"
+        end
+        buf << "\r\n"
+        sock.write buf
+      end
+
+      def request_with_body(sock, ver, path, body = @body)
         self.content_length = body.bytesize
         delete 'Transfer-Encoding'
+
         supply_default_content_type
         write_header sock, ver, path
+
         sock.write body
       end
 
-      def send_request_with_body_stream(sock, ver, path, f)
-        unless content_length() or chunked?
+      def request_with_stream(sock, ver, path, f = @body_stream)
+        unless content_length or chunked?
           raise ArgumentError,
               "Content-Length not given and Transfer-Encoding is not `chunked'"
         end
+
         supply_default_content_type
         write_header sock, ver, path
+
         if chunked?
           while s = f.read(1024)
-            sock.write(sprintf("%x\r\n", s.length) << s << "\r\n")
+            sock.write "#{s.length}\r\n#{s}\r\n"
           end
           sock.write "0\r\n\r\n"
         else
@@ -114,10 +147,12 @@ module Net2
         end
       end
 
-      def send_request_with_body_data(sock, ver, path, params)
+      def request_with_data(sock, ver, path, params = @body_data)
+        # normalize URL encoded requests to normal requests with body
         if /\Amultipart\/form-data\z/i !~ self.content_type
           self.content_type = 'application/x-www-form-urlencoded'
-          return send_request_with_body(sock, ver, path, URI.encode_www_form(params))
+          @body = URI.encode_www_form(params)
+          return exec(sock, ver, path)
         end
 
         opt = @form_option.dup
@@ -201,21 +236,6 @@ module Net2
         out << buf
         out << "\r\n" if chunked_p
         buf.gsub!(/\A.*\z/m, '')
-      end
-
-      def supply_default_content_type
-        return if content_type()
-        warn 'net/http: warning: Content-Type did not set; using application/x-www-form-urlencoded' if $VERBOSE
-        set_content_type 'application/x-www-form-urlencoded'
-      end
-
-      def write_header(sock, ver, path)
-        buf = "#{@method} #{path} HTTP/#{ver}\r\n"
-        each_capitalized do |k,v|
-          buf << "#{k}: #{v}\r\n"
-        end
-        buf << "\r\n"
-        sock.write buf
       end
 
     end

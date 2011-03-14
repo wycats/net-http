@@ -11,14 +11,17 @@ module Net2
     #
     module Header
 
-      def initialize_http_header(initheader)
+      def initialize_http_header(headers)
         @header = {}
-        return unless initheader
-        initheader.each do |key, value|
-          warn "net/http: warning: duplicated HTTP header: #{key}" if key?(key) and $VERBOSE
+        return unless headers
+
+        headers.each do |key, value|
+          warn "net/http: warning: duplicated HTTP header: #{key}" if $VERBOSE && key?(key)
           @header[key.downcase] = [value.strip]
         end
       end
+
+      alias headers= initialize_http_header
 
       def size   #:nodoc: obsolete
         @header.size
@@ -383,8 +386,7 @@ module Net2
         @body_stream = nil
         @form_option = formopt
         case enctype
-        when /\Aapplication\/x-www-form-urlencoded\z/i,
-          /\Amultipart\/form-data\z/i
+        when "application/x-www-form-urlencoded", "multipart/form-data"
           self.content_type = enctype
         else
           raise ArgumentError, "invalid enctype: #{enctype}"
