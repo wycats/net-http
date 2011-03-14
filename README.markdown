@@ -17,4 +17,6 @@ This repo contains a number of experimental modifications to the version of Net:
 * Add support for partial reads from the response
 * Document and clean up the semantics of when #body can be called after
   a request
+* The body method should never return an Adapter. It should either
+  return a String or nil (if well-defined semantics justify a nil)
 * Other features as I think of them
