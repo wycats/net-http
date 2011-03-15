@@ -19,4 +19,7 @@ This repo contains a number of experimental modifications to the version of Net:
   a request
 * The body method should never return an Adapter. It should either
   return a String or nil (if well-defined semantics justify a nil)
+* Add support for `read_nonblock ` to BufferedIO. This would simply
+  proxy to the underlying `read_nonblock` and make it easy to support
+  HTTP-level `read_nonblock`
 * Other features as I think of them

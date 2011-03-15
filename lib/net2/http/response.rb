@@ -213,6 +213,27 @@ module Net2
         @body = value
       end
 
+      def read_nonblock(len)
+        # if it's a regular stream
+        #   is len > the amount left in Content-Length?
+        #     limit it to Content-Length
+        #   call read_nonblock on the socket
+        # elsif it's a chunked stream
+        #   if in the middle of reading a chunk
+        #     is len <= the amount left in the chunk?
+        #       call read_nonblock on the socket
+        #       append result to any existing buffer
+        #       update bookkeeping
+        #     otherwise
+        #       call read_nonblock(remaining) on the socket
+        #         store result in the buffer
+        #         read_nonblock until \n
+        #         continue the process until EWOULDBLOCK or len is reached or EOF
+        #
+        # NOTE: some bookkeeping of the state of the chunked encoding
+        # parse will be required
+      end
+
       alias entity body   #:nodoc: obsolete
 
       private
