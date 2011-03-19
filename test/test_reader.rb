@@ -58,6 +58,84 @@ module Net2
         @reader.read_to_endpoint 10
       end
     end
+
+    class TestBuffer
+      def initialize(queue)
+        @queue  = queue
+        @string = ""
+      end
+
+      def <<(str)
+        @string << str
+        @queue.push :continue
+      end
+
+      def to_str
+        @string
+      end
+    end
+
+    def test_read_entire_body
+      read_queue = Queue.new
+      write_queue = Queue.new
+
+      Thread.new do
+        @write.write @body.slice(0,50)
+
+        read_queue.push :continue
+        write_queue.pop
+
+        @write.write @body[50..-2]
+
+        write_queue.pop
+
+        @write.write @body[-1..-1]
+      end
+
+      read_queue.pop
+
+      buffer = TestBuffer.new(write_queue)
+      @reader = Net2::HTTP::BodyReader.new(@read, buffer, @body.bytesize)
+      out = @reader.read
+
+      assert_equal @body, out.to_str
+    end
+
+    def test_read_nonblock
+      @reader = Net2::HTTP::BodyReader.new(@read, "", @body.bytesize)
+
+      @write.write @body.slice(0,50)
+
+      buf = ""
+      buf << @reader.read_nonblock(20)
+      buf << @reader.read_nonblock(35)
+
+      assert_raises Errno::EWOULDBLOCK do
+        @reader.read_nonblock(10)
+      end
+
+      @write.write @body[50..-2]
+
+      buf << @reader.read_nonblock(1000)
+
+      assert_raises Errno::EWOULDBLOCK do
+        @reader.read_nonblock(10)
+      end
+
+      @write.write @body[-1..-1]
+
+      buf << @reader.read_nonblock(100)
+
+      assert_raises EOFError do
+        @reader.read_nonblock(10)
+      end
+
+      assert_raises EOFError do
+        @reader.read_nonblock(10)
+      end
+
+      assert_equal @body, buf
+    end
   end
 
   class TestChunkedBodyReader < Test::Unit::TestCase
@@ -145,15 +223,52 @@ module Net2
       end
     end
 
+    def test_read_nonblock
+      @write.write 50.to_s(16)
+      @write.write "\r\n"
+      @write.write @body.slice(0,50)
+
+      buf  = @reader.read_nonblock(20)
+      buf << @reader.read_nonblock(35)
+
+      assert_raises Errno::EWOULDBLOCK do
+        @reader.read_nonblock 10
+      end
+
+      @write.write "\r\n"
+      rest = @body[50..-1]
+      @write.write rest.size.to_s(16)
+      @write.write "\r\n"
+      @write.write rest
+
+      buf << @reader.read_nonblock(1000)
+
+      assert_raises Errno::EWOULDBLOCK do
+        @reader.read_nonblock 10
+      end
+
+      @write.write "\r\n0\r\n"
+
+      assert_raises EOFError do
+        @reader.read_nonblock(100)
+      end
+
+      assert_equal @body, buf
+
+      assert_raises EOFError do
+        @reader.read_nonblock(100)
+      end
+    end
+
     class TestBuffer
       def initialize(queue)
-        @queue  = queue
+        @write_queue  = queue
         @string = ""
       end
 
       def <<(str)
         @string << str
-        @queue.push :continue
+        @write_queue.push :continue
       end
 
       def to_str
@@ -162,14 +277,16 @@ module Net2
     end
 
     def test_read_entire_body
-      queue = Queue.new
+      write_queue = Queue.new
+      read_queue = Queue.new
 
       Thread.new do
         @write.write 50.to_s(16)
         @write.write "\r\n"
         @write.write @body.slice(0,50)
 
-        queue.pop
+        read_queue.push :continue
+        write_queue.pop
 
         @write.write "\r\n"
         rest = @body[50..-1]
@@ -177,12 +294,15 @@ module Net2
         @write.write "\r\n"
         @write.write rest
 
-        queue.pop
+        write_queue.pop
 
         @write.write "\r\n0\r\n"
+
       end
 
-      buffer = TestBuffer.new(queue)
+      read_queue.pop
+
+      buffer = TestBuffer.new(write_queue)
       @reader = Net2::HTTP::ChunkedBodyReader.new(@read, buffer)
       out = @reader.read
 

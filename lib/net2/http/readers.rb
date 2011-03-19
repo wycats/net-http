@@ -1,12 +1,58 @@
 module Net2
   class HTTP
-    class BodyReader
-      def initialize(socket, endpoint, content_length)
+    class AbstractReader
+      BUFSIZE = 1024
+
+      def initialize(socket, endpoint)
         @socket         = socket
         @endpoint       = endpoint
-        @content_length = content_length
+      end
 
+      def read(bufsize, timeout=60)
+        while true
+          read_to_endpoint(bufsize)
+
+          break if eof?
+          wait timeout
+        end
+
+        @endpoint
+      end
+
+      def read_nonblock(len)
+        saw_content = read_to_endpoint(len)
+
+        unless saw_content
+          raise EOFError if eof?
+          raise Errno::EWOULDBLOCK
+        end
+
+        @endpoint
+      ensure
+        @endpoint = ""
+      end
+
+      def wait(timeout=nil)
+        if @io.is_a?(OpenSSL::SSL::SSLSocket)
+          return if IO.select nil, [@socket], nil, timeout
+        else
+          return if IO.select [@socket], nil, nil, timeout
+        end
+
+        raise Timeout::Error
+      end
+    end
+
+    class BodyReader < AbstractReader
+      def initialize(socket, endpoint, content_length)
+        super(socket, endpoint)
+
+        @content_length = content_length
         @read = 0
+      end
+
+      def read(timeout=60)
+        super @content_length, timeout
       end
 
       def read_to_endpoint(len=@content_length)
@@ -20,26 +66,19 @@ module Net2
           @endpoint << output
           @read += output.size
         rescue Errno::EWOULDBLOCK, Errno::EAGAIN, OpenSSL::SSL::SSLError
+          return false
         end
       end
 
-      def wait(timeout=nil)
-        if @io.is_a?(OpenSSL::SSL::SSLSocket)
-          return if IO.select nil, [@io], nil, timeout
-        else
-          return if IO.select [@io], nil, nil, timeout
-        end
-
-        raise Timeout::Error
+      def eof?
+        @content_length - @read == 0
       end
     end
 
-    class ChunkedBodyReader
-      BUFSIZE = 1024
-
+    class ChunkedBodyReader < AbstractReader
       def initialize(socket, endpoint="")
-        @socket          = socket
-        @endpoint        = endpoint
+        super(socket, endpoint)
+
         @raw_buffer      = ""
         @out_buffer      = ""
 
@@ -54,6 +93,8 @@ module Net2
 
         send @state
 
+        return false if len && @out_buffer.empty?
+
         if !len
           @endpoint << @out_buffer
           @out_buffer = ""
@@ -63,16 +104,24 @@ module Net2
           @endpoint << @out_buffer
           @out_buffer = ""
         end
+
+        return true
       end
 
       def read(timeout=60)
-        while true
-          @endpoint << read_to_endpoint(1024)
-          break if eof?
-          wait timeout
-        end
+        super BUFSIZE, timeout
+      end
 
-        @endpoint
+      def eof?
+        @eof && @out_buffer.empty? && @raw_buffer.empty?
+      end
+
+    private
+      def fill_buffer
+        @raw_buffer << @socket.read_nonblock(BUFSIZE)
+        return true
+      rescue Errno::EWOULDBLOCK, EOFError
+        return false
       end
 
       def process_size
@@ -94,6 +143,7 @@ module Net2
         process_chunk
       end
 
+      # TODO: Make this handle chunk metadata
       def process_chunk
         if @raw_buffer.size > @size
           @out_buffer << @raw_buffer.slice!(0, @size)
@@ -110,28 +160,6 @@ module Net2
       def process_trailer
         raise EOFError if eof?
         @eof = true
-      end
-
-      def eof?
-        @eof && @out_buffer.empty? && @raw_buffer.empty?
-      end
-
-    private
-      def fill_buffer
-        @raw_buffer << @socket.read_nonblock(BUFSIZE)
-        return true
-      rescue Errno::EWOULDBLOCK, EOFError
-        return false
-      end
-
-      def wait(timeout=nil)
-        if @io.is_a?(OpenSSL::SSL::SSLSocket)
-          return if IO.select nil, [@socket], nil, timeout
-        else
-          return if IO.select [@socket], nil, nil, timeout
-        end
-
-        raise Timeout::Error
       end
     end
   end
