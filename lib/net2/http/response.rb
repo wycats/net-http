@@ -1,5 +1,6 @@
 require "net2/http/header"
 require "net2/http/gzip"
+require "stringio"
 
 module Net2
   class HTTP
@@ -165,7 +166,7 @@ module Net2
           raise IOError, "#{self.class}\#read_body called twice" if dest or block
           return @body
         end
-        to = procdest(dest, block)
+        to = build_pipeline(dest, block)
         stream_check
         if body_exist?
           read_body_0 to
@@ -319,23 +320,39 @@ module Net2
         end
       end
 
-      def procdest(dest, block)
-        raise ArgumentError, 'both arg and block given for HTTP method' \
-            if dest and block
+      class StringAdapter
+        def initialize(buffer)
+          @buffer = buffer
+        end
+
+        def <<(chunk)
+          @buffer << chunk
+        end
+
+        def string
+          @buffer
+        end
+      end
+
+      def build_pipeline(dest, block)
+        if dest and block
+          raise ArgumentError, 'both arg and block given for HTTP method' \
+        end
+
         if block
-          wrapped_dest = ReadAdapter.new(block)
+          endpoint = ReadAdapter.new(block)
         else
-          wrapped_dest = dest || ''
+          endpoint = StringAdapter.new(dest || '')
         end
 
         case self["Content-Encoding"]
         when "gzip"
-          GzipAdapter.new(wrapped_dest)
+          endpoint = GzipAdapter.new(endpoint)
         when "deflate"
-          InflateAdapter.new(wrapped_dest)
-        else
-          wrapped_dest
+          endpoint = InflateAdapter.new(endpoint)
         end
+
+        endpoint
       end
 
     end
