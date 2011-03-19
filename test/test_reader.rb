@@ -144,6 +144,50 @@ module Net2
         @reader.read_to_endpoint
       end
     end
+
+    class TestBuffer
+      def initialize(queue)
+        @queue  = queue
+        @string = ""
+      end
+
+      def <<(str)
+        @string << str
+        @queue.push :continue
+      end
+
+      def to_str
+        @string
+      end
+    end
+
+    def test_read_entire_body
+      queue = Queue.new
+
+      Thread.new do
+        @write.write 50.to_s(16)
+        @write.write "\r\n"
+        @write.write @body.slice(0,50)
+
+        queue.pop
+
+        @write.write "\r\n"
+        rest = @body[50..-1]
+        @write.write rest.size.to_s(16)
+        @write.write "\r\n"
+        @write.write rest
+
+        queue.pop
+
+        @write.write "\r\n0\r\n"
+      end
+
+      buffer = TestBuffer.new(queue)
+      @reader = Net2::HTTP::ChunkedBodyReader.new(@read, buffer)
+      out = @reader.read
+
+      assert_equal @body, out.to_str
+    end
   end
 end
 

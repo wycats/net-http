@@ -37,7 +37,7 @@ module Net2
     class ChunkedBodyReader
       BUFSIZE = 1024
 
-      def initialize(socket, endpoint)
+      def initialize(socket, endpoint="")
         @socket          = socket
         @endpoint        = endpoint
         @raw_buffer      = ""
@@ -63,6 +63,16 @@ module Net2
           @endpoint << @out_buffer
           @out_buffer = ""
         end
+      end
+
+      def read(timeout=60)
+        while true
+          @endpoint << read_to_endpoint(1024)
+          break if eof?
+          wait timeout
+        end
+
+        @endpoint
       end
 
       def process_size
@@ -98,8 +108,12 @@ module Net2
 
       # TODO: Make this handle trailers
       def process_trailer
-        raise EOFError if @eof && @out_buffer.empty?
+        raise EOFError if eof?
         @eof = true
+      end
+
+      def eof?
+        @eof && @out_buffer.empty? && @raw_buffer.empty?
       end
 
     private
@@ -108,6 +122,16 @@ module Net2
         return true
       rescue Errno::EWOULDBLOCK, EOFError
         return false
+      end
+
+      def wait(timeout=nil)
+        if @io.is_a?(OpenSSL::SSL::SSLSocket)
+          return if IO.select nil, [@socket], nil, timeout
+        else
+          return if IO.select [@socket], nil, nil, timeout
+        end
+
+        raise Timeout::Error
       end
     end
   end
