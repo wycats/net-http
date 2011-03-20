@@ -1,6 +1,6 @@
 require "net2/http/header"
 require "net2/http/gzip"
-require "stringio"
+require "net2/http/readers"
 
 module Net2
   class HTTP
@@ -241,48 +241,14 @@ module Net2
 
       def read_body_0(dest)
         if chunked?
-          read_chunked dest
-          return
-        end
-        clen = content_length()
-        if clen
-          @socket.read clen, dest, true   # ignore EOF
-          return
-        end
-        clen = range_length()
-        if clen
-          @socket.read clen, dest
-          return
-        end
-        @socket.read_all dest
-      end
-
-      def read_chunked(dest)
-        while result = read_chunk
-          dest << result
+          reader = ChunkedBodyReader.new(@socket, dest)
+        else
+          # TODO: Why do Range lengths raise EOF?
+          clen = content_length || range_length || nil
+          reader = BodyReader.new(@socket, dest, clen)
         end
 
-        next until @socket.readline.empty?
-      ensure
-        dest.close if dest.respond_to?(:close)
-      end
-
-      def read_chunk
-        return nil if @read
-
-        line = @socket.readuntil("\r\n")
-        hexlen = line.slice(/[0-9a-fA-F]+/)
-        raise HTTPBadResponse, "wrong chunk size line: #{line}" unless hexlen
-        len = hexlen.hex
-
-        if len.zero?
-          @read = @closed = true
-          return nil
-        end
-
-        @socket.read len
-      ensure
-        @socket.read(2) unless len.zero?
+        reader.read
       end
 
       def stream_check

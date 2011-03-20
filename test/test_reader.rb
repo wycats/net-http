@@ -165,7 +165,7 @@ module Net2
     end
 
     def test_read_over
-      @write.write "#{@body.size.to_s(16)}\r\n#{@body}\r\n0\r\n"
+      @write.write "#{@body.size.to_s(16)}\r\n#{@body}\r\n0\r\n\r\n"
       @reader.read_to_endpoint 50
       assert_equal @body.slice(0,50), @buf
 
@@ -179,7 +179,7 @@ module Net2
 
     def test_blocking
       size = @body.size.to_s(16)
-      body = "#{size}\r\n#{@body}\r\n0\r\n"
+      body = "#{size}\r\n#{@body}\r\n0\r\n\r\n"
 
       @write.write body.slice(0,50 + size.size + 2)
       @reader.read_to_endpoint 100
@@ -214,7 +214,7 @@ module Net2
       @reader.read_to_endpoint
       assert_equal @body, @buf
 
-      @write.write "\r\n0\r\n"
+      @write.write "\r\n0\r\n\r\n"
       @reader.read_to_endpoint
       assert_equal @body, @buf
 
@@ -247,7 +247,7 @@ module Net2
         @reader.read_nonblock 10
       end
 
-      @write.write "\r\n0\r\n"
+      @write.write "\r\n0\r\n\r\n"
 
       assert_raises EOFError do
         @reader.read_nonblock(100)
@@ -296,7 +296,7 @@ module Net2
 
         write_queue.pop
 
-        @write.write "\r\n0\r\n"
+        @write.write "\r\n0\r\n\r\n"
 
       end
 

@@ -1,6 +1,7 @@
 module Net2
   class HTTP
-    class AbstractReader
+    # TODO: Deal with keepalive using the same socket but not sharing a reader
+    class Reader
       BUFSIZE = 1024
 
       def initialize(socket, endpoint)
@@ -33,33 +34,40 @@ module Net2
       end
 
       def wait(timeout=nil)
-        if @io.is_a?(OpenSSL::SSL::SSLSocket)
-          return if IO.select nil, [@socket], nil, timeout
+        io = @socket.to_io
+
+        if io.is_a?(OpenSSL::SSL::SSLSocket)
+          return if IO.select nil, [io], nil, timeout
         else
-          return if IO.select [@socket], nil, nil, timeout
+          return if IO.select [io], nil, nil, 1
         end
 
         raise Timeout::Error
       end
     end
 
-    class BodyReader < AbstractReader
+    class BodyReader < Reader
       def initialize(socket, endpoint, content_length)
         super(socket, endpoint)
 
         @content_length = content_length
-        @read = 0
+        @read           = 0
+        @eof            = false
       end
 
-      def read(timeout=60)
+      def read(timeout=2)
         super @content_length, timeout
       end
 
       def read_to_endpoint(len=@content_length)
-        remain = @content_length - @read
+        if @content_length && len
+          remain = @content_length - @read
 
-        raise EOFError if remain.zero?
-        len = remain if len > remain
+          raise EOFError if remain.zero?
+          len = remain if len > remain
+        else
+          len = BUFSIZE
+        end
 
         begin
           output = @socket.read_nonblock(len)
@@ -67,15 +75,18 @@ module Net2
           @read += output.size
         rescue Errno::EWOULDBLOCK, Errno::EAGAIN, OpenSSL::SSL::SSLError
           return false
+        rescue EOFError
+          @eof = true
         end
       end
 
       def eof?
-        @content_length - @read == 0
+        return true if @eof
+        @content_length - @read == 0 if @content_length
       end
     end
 
-    class ChunkedBodyReader < AbstractReader
+    class ChunkedBodyReader < Reader
       def initialize(socket, endpoint="")
         super(socket, endpoint)
 
@@ -113,7 +124,7 @@ module Net2
       end
 
       def eof?
-        @eof && @out_buffer.empty? && @raw_buffer.empty?
+        @eof && @out_buffer.empty?
       end
 
     private
@@ -158,6 +169,16 @@ module Net2
 
       # TODO: Make this handle trailers
       def process_trailer
+        idx = @raw_buffer.index("\r\n")
+        return unless idx
+
+        @raw_buffer.slice!(0, idx + 2)
+
+        @state = :process_eof if idx == 0
+        process_eof
+      end
+
+      def process_eof
         raise EOFError if eof?
         @eof = true
       end

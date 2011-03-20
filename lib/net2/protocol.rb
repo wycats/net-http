@@ -59,6 +59,8 @@ module Net2 # :nodoc:
     attr_accessor :read_timeout
     attr_accessor :debug_output
 
+    alias to_io io
+
     def inspect
       "#<#{self.class} io=#{@io}>"
     end
@@ -99,6 +101,25 @@ module Net2 # :nodoc:
       end
       LOG "read #{read_bytes} bytes"
       dest
+    end
+
+    def read_nonblock(len)
+      LOG "reading #{len} bytes in nonblock mode..."
+
+      bufsize = @rbuf.size
+
+      if bufsize > len
+        rbuf_consume(len)
+      else
+        ret = rbuf_consume(bufsize)
+
+        begin
+          ret << @io.read_nonblock(len - bufsize)
+        rescue Errno::EWOULDBLOCK, Errno::EAGAIN, OpenSSL::SSL::SSLError
+        end
+
+        ret
+      end
     end
 
     def read_all(dest = '')
