@@ -22,25 +22,68 @@ module TestNetHTTP_version_1_1_methods
     }
   end
 
-  def test_get
-    start {|http|
+  def test_get_with_block_start
+    socket = nil
+
+    start do |http|
+      socket = http.socket
       _test_get__get http
+      assert_equal socket, http.socket
       _test_get__iter http
+      assert_equal socket, http.socket
       _test_get__chunked http
-    }
+      assert_equal socket, http.socket
+
+      assert !socket.closed?
+
+      resp = http.get "/", "Connection" => "close"
+      resp.read_body
+      assert socket.closed?
+
+      http.get "/"
+      assert socket != http.socket
+    end
+
+    start do |http|
+      socket2 = http.socket
+      assert socket2 != socket
+    end
+  end
+
+  def test_get_with_no_block
+    http = start
+
+    socket = http.socket
+    _test_get__get http
+    assert_equal socket, http.socket
+    _test_get__iter http
+    assert_equal socket, http.socket
+    _test_get__chunked http
+    assert_equal socket, http.socket
+
+    assert !socket.closed?
+
+    resp = http.get "/", "Connection" => "close"
+    resp.read_body
+    assert socket.closed?
+
+    http.get "/"
+    assert socket != http.socket
   end
 
   def _test_get__get(http)
-    res = http.get('/')
-    assert_kind_of Net::HTTPResponse, res
-    assert_kind_of String, res.body
-    if !chunked? && !gzip?
-      assert_not_nil res['content-length']
-      assert_equal $test_net_http_data.size, res['content-length'].to_i
+    2.times do
+      res = http.get('/')
+      assert_kind_of Net::HTTPResponse, res
+      assert_kind_of String, res.body
+      if !chunked? && !gzip?
+        assert_not_nil res['content-length']
+        assert_equal $test_net_http_data.size, res['content-length'].to_i
+      end
+      assert_equal $test_net_http_data_type, res['Content-Type']
+      assert_equal $test_net_http_data.size, res.body.size
+      assert_equal $test_net_http_data, res.body
     end
-    assert_equal $test_net_http_data_type, res['Content-Type']
-    assert_equal $test_net_http_data.size, res.body.size
-    assert_equal $test_net_http_data, res.body
 
     assert_nothing_raised {
       res, body = http.get('/', { 'User-Agent' => 'test' }.freeze)
@@ -48,35 +91,45 @@ module TestNetHTTP_version_1_1_methods
   end
 
   def _test_get__iter(http)
-    buf = ''
-    res = http.get('/') {|s| buf << s }
-    assert_kind_of Net::HTTPResponse, res
-    # assert_kind_of String, res.body
-    if !chunked? && !gzip?
-      assert_not_nil res['content-length']
-      assert_equal $test_net_http_data.size, res['content-length'].to_i
+    2.times do
+      buf = ''
+      res = http.get('/') {|s| buf << s }
+      assert_kind_of Net::HTTPResponse, res
+      if !chunked? && !gzip?
+        assert_not_nil res['content-length']
+        assert_equal $test_net_http_data.size, res['content-length'].to_i
+      end
+      assert_equal $test_net_http_data_type, res['Content-Type']
+      assert_equal $test_net_http_data.size, buf.size
+      assert_equal $test_net_http_data, buf
     end
-    assert_equal $test_net_http_data_type, res['Content-Type']
-    assert_equal $test_net_http_data.size, buf.size
-    assert_equal $test_net_http_data, buf
-    # assert_equal $test_net_http_data.size, res.body.size
-    # assert_equal $test_net_http_data, res.body
   end
 
   def _test_get__chunked(http)
-    buf = ''
-    res = http.get('/') {|s| buf << s }
-    assert_kind_of Net::HTTPResponse, res
-    # assert_kind_of String, res.body
-    if !chunked? && !gzip?
-      assert_not_nil res['content-length']
-      assert_equal $test_net_http_data.size, res['content-length'].to_i
+    2.times do
+      buf = ''
+      res = http.get('/') {|s| buf << s }
+      assert_kind_of Net::HTTPResponse, res
+      if !chunked? && !gzip?
+        assert_not_nil res['content-length']
+        assert_equal $test_net_http_data.size, res['content-length'].to_i
+      end
+      assert_equal $test_net_http_data_type, res['Content-Type']
+      assert_equal $test_net_http_data.size, buf.size
+      assert_equal $test_net_http_data, buf
     end
-    assert_equal $test_net_http_data_type, res['Content-Type']
-    assert_equal $test_net_http_data.size, buf.size
-    assert_equal $test_net_http_data, buf
-    # assert_equal $test_net_http_data.size, res.body.size
-    # assert_equal $test_net_http_data, res.body
+
+    2.times do
+      res = http.get '/'
+      assert_kind_of Net::HTTPResponse, res
+      if !chunked? && !gzip?
+        assert_not_nil res['content-length']
+        assert_equal $test_net_http_data.size, res['content-length'].to_i
+      end
+      assert_equal $test_net_http_data_type, res['Content-Type']
+      assert_equal $test_net_http_data.size, res.body.size
+      assert_equal $test_net_http_data, res.body
+    end
   end
 
   def test_get__break

@@ -638,6 +638,9 @@ module Net2   #:nodoc:
       @debug_output = output
     end
 
+    # The socket
+    attr_reader :socket
+
     # The DNS host name or IP address to connect to.
     attr_reader :address
 
