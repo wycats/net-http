@@ -6,6 +6,7 @@ rescue LoadError
 end
 require 'webrick/httpservlet/abstract'
 require 'zlib'
+require "test/unit"
 
 require 'net2/http'
 Net = Net2

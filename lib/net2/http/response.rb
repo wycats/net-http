@@ -137,6 +137,10 @@ module Net2
         request.response_body_permitted? && self.class.body_permitted?
       end
 
+      def finished?
+        @closed
+      end
+
       # Gets the entity body returned by the remote HTTP server.
       #
       # If a block is given, the body is passed to the block, and
@@ -215,6 +219,19 @@ module Net2
       end
 
       def read_nonblock(len)
+        @nonblock_endpoint ||= begin
+          @buf = ""
+          @buf.force_encoding("BINARY") if @buf.respond_to?(:force_encoding)
+          build_pipeline(@buf)
+        end
+
+        @nonblock_reader ||= reader(@nonblock_endpoint)
+
+        @nonblock_reader.read_nonblock(len)
+
+        @closed = @nonblock_reader.eof?
+
+        @buf.slice!(0, @buf.size)
         # if it's a regular stream
         #   is len > the amount left in Content-Length?
         #     limit it to Content-Length
@@ -235,20 +252,28 @@ module Net2
         # parse will be required
       end
 
+      def wait(timeout=60)
+        return unless @nonblock_reader
+
+        @nonblock_reader.wait(timeout)
+      end
+
       alias entity body   #:nodoc: obsolete
 
       private
 
       def read_body_0(dest)
+        reader(dest).read
+      end
+
+      def reader(dest)
         if chunked?
-          reader = ChunkedBodyReader.new(@socket, dest)
+          ChunkedBodyReader.new(@socket, dest)
         else
           # TODO: Why do Range lengths raise EOF?
           clen = content_length || range_length || nil
-          reader = BodyReader.new(@socket, dest, clen)
+          BodyReader.new(@socket, dest, clen)
         end
-
-        reader.read
       end
 
       def stream_check
@@ -300,7 +325,7 @@ module Net2
         end
       end
 
-      def build_pipeline(dest, block)
+      def build_pipeline(dest, block = nil)
         if dest and block
           raise ArgumentError, 'both arg and block given for HTTP method' \
         end

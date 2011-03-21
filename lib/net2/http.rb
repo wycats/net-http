@@ -1342,11 +1342,9 @@ module Net2   #:nodoc:
       if @socket.closed?
         connect
       else
-        # Make sure that the current response is closed. A response would
-        # be open if the request was made without a block, and the client
-        # never read the body. In this situation, we need to read the
-        # expected body in order to continue to use the same connection.
-        @current_response.close if @current_response
+        if @current_response && !@current_response.finished?
+          raise "You can't start a new request on the same socket until you have read the entirety of the previous request"
+        end
       end
 
       # If close_on_empty_response is set, and the response is not

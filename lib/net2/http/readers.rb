@@ -23,14 +23,9 @@ module Net2
       def read_nonblock(len)
         saw_content = read_to_endpoint(len)
 
-        unless saw_content
-          raise EOFError if eof?
-          raise Errno::EWOULDBLOCK
-        end
+        raise Errno::EWOULDBLOCK unless saw_content
 
         @endpoint
-      ensure
-        @endpoint = ""
       end
 
       def wait(timeout=nil)
@@ -39,7 +34,7 @@ module Net2
         if io.is_a?(OpenSSL::SSL::SSLSocket)
           return if IO.select nil, [io], nil, timeout
         else
-          return if IO.select [io], nil, nil, 1
+          return if IO.select [io], nil, nil, timeout
         end
 
         raise Timeout::Error
@@ -100,11 +95,15 @@ module Net2
       end
 
       def read_to_endpoint(len=nil)
-        fill_buffer
+        blocked = fill_buffer
+
+        raise EOFError if eof?
+
+        if blocked
+          return false if @raw_buffer.empty? && @out_buffer.empty?
+        end
 
         send @state
-
-        return false if len && @out_buffer.empty?
 
         if !len
           @endpoint << @out_buffer
@@ -130,9 +129,9 @@ module Net2
     private
       def fill_buffer
         @raw_buffer << @socket.read_nonblock(BUFSIZE)
-        return true
-      rescue Errno::EWOULDBLOCK, EOFError
         return false
+      rescue Errno::EWOULDBLOCK, EOFError
+        return true
       end
 
       def process_size
@@ -174,8 +173,12 @@ module Net2
 
         @raw_buffer.slice!(0, idx + 2)
 
-        @state = :process_eof if idx == 0
-        process_eof
+        if idx == 0
+          @state = :process_eof if idx == 0
+          process_eof
+        else
+          process_trailer
+        end
       end
 
       def process_eof

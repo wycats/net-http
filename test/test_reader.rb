@@ -1,6 +1,8 @@
 require "test/unit"
 require "utils"
 require "net2/http/readers"
+require "zlib"
+require "stringio"
 
 module Net2
   class TestBodyReader < Test::Unit::TestCase
@@ -102,13 +104,13 @@ module Net2
     end
 
     def test_read_nonblock
-      @reader = Net2::HTTP::BodyReader.new(@read, "", @body.bytesize)
+      buf = ""
+      @reader = Net2::HTTP::BodyReader.new(@read, buf, @body.bytesize)
 
       @write.write @body.slice(0,50)
 
-      buf = ""
-      buf << @reader.read_nonblock(20)
-      buf << @reader.read_nonblock(35)
+      @reader.read_nonblock(20)
+      @reader.read_nonblock(35)
 
       assert_raises Errno::EWOULDBLOCK do
         @reader.read_nonblock(10)
@@ -116,7 +118,7 @@ module Net2
 
       @write.write @body[50..-2]
 
-      buf << @reader.read_nonblock(1000)
+      @reader.read_nonblock(1000)
 
       assert_raises Errno::EWOULDBLOCK do
         @reader.read_nonblock(10)
@@ -124,7 +126,7 @@ module Net2
 
       @write.write @body[-1..-1]
 
-      buf << @reader.read_nonblock(100)
+      @reader.read_nonblock(100)
 
       assert_raises EOFError do
         @reader.read_nonblock(10)
@@ -135,6 +137,54 @@ module Net2
       end
 
       assert_equal @body, buf
+    end
+
+    def test_read_nonblock_gzip
+      inflated_body = @body
+
+      io = StringIO.new
+
+      gzip = Zlib::GzipWriter.new(io)
+      gzip.write @body
+      gzip.close
+
+      @body = io.string
+
+      buf = ""
+      endpoint = Net2::HTTP::Response::StringAdapter.new(buf)
+      endpoint = Net2::HTTP::Response::GzipAdapter.new(endpoint)
+      @reader = Net2::HTTP::BodyReader.new(@read, endpoint, @body.bytesize)
+
+      @write.write @body.slice(0,50)
+
+      @reader.read_nonblock(20)
+      @reader.read_nonblock(35)
+
+      assert_raises Errno::EWOULDBLOCK do
+        @reader.read_nonblock(10)
+      end
+
+      @write.write @body[50..-2]
+
+      @reader.read_nonblock(1000)
+
+      assert_raises Errno::EWOULDBLOCK do
+        @reader.read_nonblock(10)
+      end
+
+      @write.write @body[-1..-1]
+
+      @reader.read_nonblock(100)
+
+      assert_raises EOFError do
+        @reader.read_nonblock(10)
+      end
+
+      assert_raises EOFError do
+        @reader.read_nonblock(10)
+      end
+
+      assert_equal inflated_body, buf
     end
   end
 
@@ -228,8 +278,8 @@ module Net2
       @write.write "\r\n"
       @write.write @body.slice(0,50)
 
-      buf  = @reader.read_nonblock(20)
-      buf << @reader.read_nonblock(35)
+      @reader.read_nonblock(20)
+      @reader.read_nonblock(35)
 
       assert_raises Errno::EWOULDBLOCK do
         @reader.read_nonblock 10
@@ -241,19 +291,20 @@ module Net2
       @write.write "\r\n"
       @write.write rest
 
-      buf << @reader.read_nonblock(1000)
+      @reader.read_nonblock(1000)
 
       assert_raises Errno::EWOULDBLOCK do
         @reader.read_nonblock 10
       end
 
       @write.write "\r\n0\r\n\r\n"
+      @reader.read_nonblock 10
 
       assert_raises EOFError do
         @reader.read_nonblock(100)
       end
 
-      assert_equal @body, buf
+      assert_equal @body, @buf
 
       assert_raises EOFError do
         @reader.read_nonblock(100)

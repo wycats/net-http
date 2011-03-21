@@ -56,6 +56,8 @@ module TestNetHTTP_version_1_1_methods
     socket = http.socket
     _test_get__get http
     assert_equal socket, http.socket
+    _test_get__read_nonblock http
+    assert_equal socket, http.socket
     _test_get__iter http
     assert_equal socket, http.socket
     _test_get__chunked http
@@ -72,18 +74,16 @@ module TestNetHTTP_version_1_1_methods
   end
 
   def _test_get__get(http)
-    2.times do
-      res = http.get('/')
-      assert_kind_of Net::HTTPResponse, res
-      assert_kind_of String, res.body
-      if !chunked? && !gzip?
-        assert_not_nil res['content-length']
-        assert_equal $test_net_http_data.size, res['content-length'].to_i
-      end
-      assert_equal $test_net_http_data_type, res['Content-Type']
-      assert_equal $test_net_http_data.size, res.body.size
-      assert_equal $test_net_http_data, res.body
+    res = http.get('/')
+    assert_kind_of Net::HTTPResponse, res
+    assert_kind_of String, res.body
+    if !chunked? && !gzip?
+      assert_not_nil res['content-length']
+      assert_equal $test_net_http_data.size, res['content-length'].to_i
     end
+    assert_equal $test_net_http_data_type, res['Content-Type']
+    assert_equal $test_net_http_data.size, res.body.size
+    assert_equal $test_net_http_data, res.body
 
     assert_nothing_raised {
       res, body = http.get('/', { 'User-Agent' => 'test' }.freeze)
@@ -91,45 +91,79 @@ module TestNetHTTP_version_1_1_methods
   end
 
   def _test_get__iter(http)
-    2.times do
-      buf = ''
-      res = http.get('/') {|s| buf << s }
-      assert_kind_of Net::HTTPResponse, res
-      if !chunked? && !gzip?
-        assert_not_nil res['content-length']
-        assert_equal $test_net_http_data.size, res['content-length'].to_i
-      end
-      assert_equal $test_net_http_data_type, res['Content-Type']
-      assert_equal $test_net_http_data.size, buf.size
-      assert_equal $test_net_http_data, buf
+    buf = ''
+    res = http.get('/') {|s| buf << s }
+    assert_kind_of Net::HTTPResponse, res
+    if !chunked? && !gzip?
+      assert_not_nil res['content-length']
+      assert_equal $test_net_http_data.size, res['content-length'].to_i
     end
+    assert_equal $test_net_http_data_type, res['Content-Type']
+    assert_equal $test_net_http_data.size, buf.size
+    assert_equal $test_net_http_data, buf
   end
 
   def _test_get__chunked(http)
-    2.times do
-      buf = ''
-      res = http.get('/') {|s| buf << s }
-      assert_kind_of Net::HTTPResponse, res
-      if !chunked? && !gzip?
-        assert_not_nil res['content-length']
-        assert_equal $test_net_http_data.size, res['content-length'].to_i
-      end
-      assert_equal $test_net_http_data_type, res['Content-Type']
-      assert_equal $test_net_http_data.size, buf.size
-      assert_equal $test_net_http_data, buf
+    buf = ''
+    res = http.get('/') {|s| buf << s }
+    assert_kind_of Net::HTTPResponse, res
+    if !chunked? && !gzip?
+      assert_not_nil res['content-length']
+      assert_equal $test_net_http_data.size, res['content-length'].to_i
+    end
+    assert_equal $test_net_http_data_type, res['Content-Type']
+    assert_equal $test_net_http_data.size, buf.size
+    assert_equal $test_net_http_data, buf
+
+    res = http.get '/'
+    assert_kind_of Net::HTTPResponse, res
+    if !chunked? && !gzip?
+      assert_not_nil res['content-length']
+      assert_equal $test_net_http_data.size, res['content-length'].to_i
+    end
+    assert_equal $test_net_http_data_type, res['Content-Type']
+    assert_equal $test_net_http_data.size, res.body.size
+    assert_equal $test_net_http_data, res.body
+  end
+
+  def _test_get__read_nonblock(http)
+    res = nil
+    buf = nil
+
+    res = http.request_get('/')
+    assert_kind_of Net::HTTPResponse, res
+
+    buf = ''
+
+    until res.finished?
+      res.wait(1)
+      chunk = res.read_nonblock(1000)
+      buf << chunk
     end
 
-    2.times do
-      res = http.get '/'
-      assert_kind_of Net::HTTPResponse, res
-      if !chunked? && !gzip?
-        assert_not_nil res['content-length']
-        assert_equal $test_net_http_data.size, res['content-length'].to_i
-      end
-      assert_equal $test_net_http_data_type, res['Content-Type']
-      assert_equal $test_net_http_data.size, res.body.size
-      assert_equal $test_net_http_data, res.body
+    assert_raises EOFError do
+      res.read_nonblock(10)
     end
+
+    assert_equal $test_net_http_data_type, res['Content-Type']
+    assert_equal $test_net_http_data, buf
+
+    assert_nothing_raised do
+      res, body = http.get('/', { 'User-Agent' => 'test' }.freeze)
+    end
+
+  end
+
+  def wait(socket, timeout=nil)
+    io = socket.to_io
+
+    if io.is_a?(OpenSSL::SSL::SSLSocket)
+      return if IO.select nil, [io], nil, timeout
+    else
+      return if IO.select [io], nil, nil, timeout
+    end
+
+    raise Timeout::Error
   end
 
   def test_get__break
