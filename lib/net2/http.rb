@@ -1235,6 +1235,9 @@ module Net2   #:nodoc:
     alias post2  request_post   #:nodoc: obsolete
     alias put2   request_put    #:nodoc: obsolete
 
+    def to_io
+      @socket
+    end
 
     # Sends an HTTP request to the HTTP server.
     # Also sends a DATA string if +data+ is given.

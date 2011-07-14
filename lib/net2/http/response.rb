@@ -82,6 +82,7 @@ module Net2
       attr_reader :code
 
       attr_accessor :socket
+      alias to_io socket
 
       attr_accessor :request
 
@@ -139,6 +140,12 @@ module Net2
 
       def finished?
         @closed
+      end
+
+      alias closed? finished?
+
+      def eof?
+        @nonblock_reader ? @nonblock_reader.eof? : finished?
       end
 
       # Gets the entity body returned by the remote HTTP server.
