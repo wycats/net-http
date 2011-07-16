@@ -32,9 +32,9 @@ module Net2
         io = @socket.to_io
 
         if io.is_a?(OpenSSL::SSL::SSLSocket)
-          return if IO.select nil, [io], nil, timeout
+          return if IO.select [io], [io], nil, timeout
         else
-          return if IO.select [io], nil, nil, timeout
+          return if IO.select [io], [io], nil, timeout
         end
 
         raise Timeout::Error
@@ -99,7 +99,7 @@ module Net2
 
         raise EOFError if eof?
 
-        if blocked
+        if blocked == :blocked
           return false if @raw_buffer.empty? && @out_buffer.empty?
         end
 
@@ -115,6 +115,10 @@ module Net2
           @out_buffer = ""
         end
 
+        if blocked == :eof
+          @eof = true
+        end
+
         return true
       end
 
@@ -123,15 +127,19 @@ module Net2
       end
 
       def eof?
-        @eof && @out_buffer.empty?
+        @eof && @raw_buffer.empty? && @out_buffer.empty?
       end
 
     private
       def fill_buffer
-        @raw_buffer << @socket.read_nonblock(BUFSIZE)
+        return :eof if @eof
+        ret = @socket.read_nonblock(BUFSIZE)
+        @raw_buffer << ret
         return false
-      rescue Errno::EWOULDBLOCK, EOFError
-        return true
+      rescue Errno::EWOULDBLOCK
+        return :blocked
+      rescue EOFError
+        return :eof
       end
 
       def process_size
@@ -155,7 +163,7 @@ module Net2
 
       # TODO: Make this handle chunk metadata
       def process_chunk
-        if @raw_buffer.size > @size
+        if @raw_buffer.size >= @size
           @out_buffer << @raw_buffer.slice!(0, @size)
           @state = :process_size
           process_size

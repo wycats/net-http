@@ -104,7 +104,7 @@ module Net2 # :nodoc:
     end
 
     def read_nonblock(len)
-      LOG "reading #{len} bytes in nonblock mode..."
+      LOG "reading #{len} bytes from #{@io.inspect} in nonblock mode..."
 
       bufsize = @rbuf.size
 
@@ -116,6 +116,8 @@ module Net2 # :nodoc:
         begin
           ret << @io.read_nonblock(len - bufsize)
         rescue Errno::EWOULDBLOCK, Errno::EAGAIN, OpenSSL::SSL::SSLError
+        rescue EOFError
+          raise if ret.empty?
         end
 
         ret
@@ -180,7 +182,7 @@ module Net2 # :nodoc:
 
     def rbuf_consume(len)
       s = @rbuf.slice!(0, len)
-      @debug_output << %Q[-> #{s.dump}\n] if @debug_output
+      LOG %Q[-> #{s.dump}\n]
       s
     end
 
