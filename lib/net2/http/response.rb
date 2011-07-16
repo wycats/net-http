@@ -1,5 +1,4 @@
 require "net2/http/header"
-require "net2/http/gzip"
 require "net2/http/readers"
 
 module Net2
@@ -67,6 +66,8 @@ module Net2
         @http_version = httpv
         @code         = code
         @message      = msg
+        @middlewares  = [DecompressionMiddleware]
+        @used         = false
 
         initialize_http_header nil
         @body = nil
@@ -177,11 +178,25 @@ module Net2
           raise IOError, "#{self.class}\#read_body called twice" if dest or block
           return @body
         end
-        to = build_pipeline(dest, block)
+
+        if dest && block
+          raise ArgumentError, 'both arg and block given for HTTP method'
+        end
+
+        if block
+          @buffer = ReadAdapter.new(block)
+        else
+          @buffer = StringAdapter.new(dest || '')
+        end
+
+        to = build_pipeline(@buffer)
+
         stream_check
         if body_exist?
           read_body_0 to
-          @body = to
+          @body ||= begin
+            @buffer.respond_to?(:string) ? @buffer.string : nil
+          end
         else
           @body = nil
         end
@@ -215,8 +230,6 @@ module Net2
       #
       def body
         read_body
-        return @body if @body.is_a?(String)
-        return @body.string if @body.respond_to?(:string)
       end
 
       # Because it may be necessary to modify the body, Eg, decompression
@@ -239,24 +252,6 @@ module Net2
         @closed = @nonblock_reader.eof?
 
         @buf.slice!(0, @buf.size)
-        # if it's a regular stream
-        #   is len > the amount left in Content-Length?
-        #     limit it to Content-Length
-        #   call read_nonblock on the socket
-        # elsif it's a chunked stream
-        #   if in the middle of reading a chunk
-        #     is len <= the amount left in the chunk?
-        #       call read_nonblock on the socket
-        #       append result to any existing buffer
-        #       update bookkeeping
-        #     otherwise
-        #       call read_nonblock(remaining) on the socket
-        #         store result in the buffer
-        #         read_nonblock until \n
-        #         continue the process until EWOULDBLOCK or len is reached or EOF
-        #
-        # NOTE: some bookkeeping of the state of the chunked encoding
-        # parse will be required
       end
 
       def wait(timeout=60)
@@ -267,7 +262,21 @@ module Net2
 
       alias entity body   #:nodoc: obsolete
 
+      def use(middleware)
+        @middlewares = [] unless @used
+        @used = true
+        @middlewares.unshift middleware
+      end
+
       private
+
+      def build_pipeline(buffer)
+        pipeline = buffer
+        @middlewares.each do |middleware|
+          pipeline = middleware.new(pipeline, self)
+        end
+        pipeline
+      end
 
       def read_body_0(dest)
         reader(dest).read
@@ -287,18 +296,29 @@ module Net2
         raise IOError, 'attempt to read body out of block' if @socket.closed?
       end
 
-      class DecompressionAdapter
-        attr_reader :string
+      class DecompressionMiddleware
+        class NoopInflater
+          def inflate(chunk)
+            chunk
+          end
+        end
 
-        def initialize(buffer)
-          @buffer = buffer
-          @string = ""
+        def initialize(upstream, res)
+          @upstream = upstream
+
+          case res["Content-Encoding"]
+          when 'gzip'
+            @inflater = Zlib::Inflate.new Zlib::MAX_WBITS + 16
+          when 'deflate'
+            @inflater = Zlib::Inflate.new
+          else
+            @inflater = NoopInflater.new
+          end
         end
 
         def <<(chunk)
-          result = inflater.inflate(chunk)
-          @string << result
-          @buffer << result
+          result = @inflater.inflate(chunk)
+          @upstream << result
         end
 
         def close
@@ -306,21 +326,9 @@ module Net2
         end
       end
 
-      class GzipAdapter < DecompressionAdapter
-        def inflater
-          @inflater ||= Net2::GzipInflater.new
-        end
-      end
-
-      class InflateAdapter < DecompressionAdapter
-        def inflater
-          @inflater ||= Zlib::Inflate.new
-        end
-      end
-
       class StringAdapter
-        def initialize(buffer)
-          @buffer = buffer
+        def initialize(upstream)
+          @buffer = upstream
         end
 
         def <<(chunk)
@@ -330,27 +338,6 @@ module Net2
         def string
           @buffer
         end
-      end
-
-      def build_pipeline(dest, block = nil)
-        if dest and block
-          raise ArgumentError, 'both arg and block given for HTTP method' \
-        end
-
-        if block
-          endpoint = ReadAdapter.new(block)
-        else
-          endpoint = StringAdapter.new(dest || '')
-        end
-
-        case self["Content-Encoding"]
-        when "gzip"
-          endpoint = GzipAdapter.new(endpoint)
-        when "deflate"
-          endpoint = InflateAdapter.new(endpoint)
-        end
-
-        endpoint
       end
 
     end

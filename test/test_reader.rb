@@ -152,7 +152,7 @@ module Net2
 
       buf = ""
       endpoint = Net2::HTTP::Response::StringAdapter.new(buf)
-      endpoint = Net2::HTTP::Response::GzipAdapter.new(endpoint)
+      endpoint = Net2::HTTP::Response::DecompressionMiddleware.new(endpoint, { "Content-Encoding" => "gzip"})
       @reader = Net2::HTTP::BodyReader.new(@read, endpoint, @body.bytesize)
 
       @write.write @body.slice(0,50)
