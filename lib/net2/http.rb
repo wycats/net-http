@@ -757,13 +757,14 @@ module Net2   #:nodoc:
       if block_given?
         begin
           do_start
-          return yield(self)
+          yield(self)
         ensure
           do_finish
         end
+      else
+        do_start
+        self
       end
-      do_start
-      self
     end
 
     def do_start
